@@ -1,4 +1,4 @@
-# ***Just use [http://ip8.com](http://ip8.com)***
+# ***Just use https://dirty-x.github.io/dirty-track.ip/***
 
 ![Banner](https://raw.githubusercontent.com/Dirty-X/release-download/master/images/banner/trackip.png)
 
