@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIRTY TITIAN | Intelligence Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;700&family=Outfit:wght@300;400;600;900&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="cyber-theme">
+    <div class="background-overlay"></div>
+
+    <header>
+        <div class="logo-section">
+            <h1 class="glitch" data-text="DIRTY TITIAN">DIRTY TITIAN</h1>
+            <span class="version-badge">v3.0 TITIAN EDITION</span>
+        </div>
+        <div class="status-bar">
+            <div class="status-item"><span class="dot pulse-green"></span> NODE: ACTIVE</div>
+            <div class="status-item"><span class="dot pulse-magenta"></span> SECURITY: ENHANCED</div>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <section class="control-panel">
+            <div class="card glass">
+                <h3><i class="icon-intel"></i> NETWORK INTELLIGENCE</h3>
+                <div class="input-group">
+                    <input type="text" id="targetIp" placeholder="Enter Target IPv4/IPv6..." autocomplete="off">
+                    <button id="trackBtn" class="btn-primary">TRACK TARGET</button>
+                    <button id="generateBtn" class="btn-secondary">GENERATE & SCAN</button>
+                </div>
+                <div class="quick-status">
+                    <p id="userIpDisplay">DETECTING LOCAL IP...</p>
+                </div>
+            </div>
+
+            <div class="card glass terminal-card">
+                <div class="terminal-header">
+                    <span>DIRTY_TITIAN_CONSENSUS_LOG</span>
+                </div>
+                <div id="terminalOutput" class="terminal-body">
+                    <p class="typist">> System initialized...</p>
+                    <p class="typist">> Awaiting target instruction...</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="intel-panel">
+            <div class="card glass results-card">
+                <h3><i class="icon-results"></i> TITIAN ANALYSIS</h3>
+                <div id="resultsGrid" class="results-grid">
+                    <div class="stat-box">
+                        <label>DECIMAL IP</label>
+                        <span id="resDecimal">N/A</span>
+                    </div>
+                    <div class="stat-box">
+                        <label>HOSTNAME</label>
+                        <span id="resHostname">N/A</span>
+                    </div>
+                    <div class="stat-box">
+                        <label>LOCATION</label>
+                        <span id="resLocation">N/A</span>
+                    </div>
+                    <div class="stat-box">
+                        <label>PROVIDER</label>
+                        <span id="resIsp">N/A</span>
+                    </div>
+                    <div class="stat-box">
+                        <label>NETWORK TYPE</label>
+                        <span id="resType">N/A</span>
+                    </div>
+                    <div class="stat-box">
+                        <label>RISK PROFILE</label>
+                        <span id="resRisk" class="status-neutral">N/A</span>
+                    </div>
+                    <div class="stat-box coord-box">
+                        <label>PRECISION COORDINATES (DMS)</label>
+                        <span id="resDms">N/A</span>
+                    </div>
+                </div>
+                <div class="consensus-meter">
+                    <label>CONSENSUS ACCURACY</label>
+                    <div class="progress-container">
+                        <div id="consensusBar" class="progress-bar"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="map" class="card glass map-container"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p>CREATED BY <a href="https://github.com/Dirty-X" target="_blank" rel="noopener">DIRTY-X</a> | GITHUB PAGES
+            DEPLOYMENT READY</p>
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>

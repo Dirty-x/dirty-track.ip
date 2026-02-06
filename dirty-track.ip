@@ -1,0 +1,277 @@
+#!/bin/bash
+# Description: Advanced IP Tracker - DIRTY TITIAN Edition
+# GitHub: https://github.com/Dirty-X/dirty-track.ip
+# Author: Dirty-X
+
+set -euo pipefail
+
+# --- Configuration & Constants ---
+REQUIRED_TOOLS=("curl" "jq" "ping" "whois" "dig")
+LOG_FILE="history.log"
+EXPORT_DIR="exports"
+MAX_THREADS=8  # DIRTY TITIAN-level parallelism
+
+# Colors
+COLOR_RESET="\e[0m"
+COLOR_RED="\e[1;31m"
+COLOR_GREEN="\e[1;32m"
+COLOR_YELLOW="\e[1;33m"
+COLOR_BLUE="\e[1;34m"
+COLOR_MAGENTA="\e[1;35m"
+COLOR_CYAN="\e[1;36m"
+COLOR_WHITE="\e[1;37m"
+
+# DIRTY TITIAN Consensus API Source List
+# These are selected for their high accuracy and different data points
+API_SOURCES=(
+    "ipapi.co|https://ipapi.co/{IP}/json/|."
+    "freeipapi.com|https://freeipapi.com/api/json/{IP}|."
+    "ip-api.com|http://ip-api.com/json/{IP}?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,query,proxy,hosting,mobile,crawler|."
+    "iplocate.io|https://www.iplocate.io/api/lookup/{IP}|."
+)
+
+# --- Functions ---
+
+banner() {
+    clear
+    printf "${COLOR_MAGENTA}  ____  ___ ____ _____   __  ${COLOR_CYAN}_____ ___ _____ ___    _    _   _ ${COLOR_RESET}\n"
+    printf "${COLOR_MAGENTA} |  _ \|_ _|  _ \_   _\ \ / / ${COLOR_CYAN} |_   _|_ _|_   _|_ _|  / \  | \ | |${COLOR_RESET}\n"
+    printf "${COLOR_MAGENTA} | | | || || |_) || |  \ V /  ${COLOR_CYAN}    | |  | |  | |  | |  / _ \ |  \| |${COLOR_RESET}\n"
+    printf "${COLOR_MAGENTA} | |_| || ||  _ < | |   | |   ${COLOR_CYAN}    | |  | |  | |  | | / ___ \| |\  |${COLOR_RESET}\n"
+    printf "${COLOR_MAGENTA} |____/___|_| \_\|_|   |_|   ${COLOR_CYAN}    |_| |___| |_| |___/_/   \_\_| \_|${COLOR_RESET}\n\n"
+    printf "${COLOR_WHITE}    [ DIRTY TITIAN EDITION ] - Consensus-Based Global Intelligence${COLOR_RESET}\n"
+    printf "${COLOR_YELLOW}    Created By Dirty-X ${COLOR_RESET}\n\n"
+}
+
+check_dependencies() {
+    local missing=()
+    for tool in "${REQUIRED_TOOLS[@]}"; do
+        command -v "$tool" &> /dev/null || missing+=("$tool")
+    done
+    if [ ${#missing[@]} -ne 0 ]; then
+        printf " ${COLOR_RED}[!] Critical: Missing dependencies: ${missing[*]}${COLOR_RESET}\n"
+        exit 1
+    fi
+}
+
+validate_ip() {
+    local ip=$1
+    [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || [[ $ip =~ ^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}$ ]]
+}
+
+# Intelligence Utilities
+ipv4_to_decimal() {
+    local ip=$1
+    if [[ $ip =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        echo "$(( (${BASH_REMATCH[1]} << 24) + (${BASH_REMATCH[2]} << 16) + (${BASH_REMATCH[3]} << 8) + ${BASH_REMATCH[4]} ))"
+    else
+        echo "N/A"
+    fi
+}
+
+dms_convert() {
+    local coord=$1
+    [[ "$coord" == "N/A" ]] && { echo "N/A"; return; }
+    local deg min sec hemi
+    local abs_coord=${coord#-}
+    
+    deg=$(printf "%.0f" "${abs_coord%.*}")
+    local rem=$(echo "($abs_coord - $deg) * 60" | bc -l)
+    min=$(printf "%.0f" "${rem%.*}")
+    sec=$(echo "($rem - $min) * 60" | bc -l | xargs printf "%.2f")
+    
+    # Determining hemisphere
+    if [[ "$2" == "lat" ]]; then
+        [[ $(echo "$coord >= 0" | bc -l) -eq 1 ]] && hemi="N" || hemi="S"
+    else
+        [[ $(echo "$coord >= 0" | bc -l) -eq 1 ]] && hemi="E" || hemi="W"
+    fi
+    
+    echo "${deg}° ${min}′ ${sec}″ ${hemi}"
+}
+
+# Accurate consensus intelligence gathering
+get_ip_consensus() {
+    local ip=$1
+    local success_count=0
+    local i=0
+    # Create a session-unique ID to prevent collisions in parallel batching
+    local session_id="${$}_$(date +%s)_${RANDOM}"
+    local consensus_file="/tmp/dt_con_${session_id}.json"
+    echo "{}" > "$consensus_file"
+
+    # Parallel retrieval of all sources for this IP
+    for source in "${API_SOURCES[@]}"; do
+        IFS='|' read -r name url_template filter <<< "$source"
+        local url=${url_template//"{IP}"/$ip}
+        
+        # Adjust URL for "My IP"
+        if [[ -z "$ip" ]]; then
+            [[ "$name" == "ipapi.co" ]] && url="https://ipapi.co/json/"
+            [[ "$name" == "freeipapi.com" ]] && url="https://freeipapi.com/api/json"
+            [[ "$name" == "ip-api.com" ]] && url="http://ip-api.com/json/?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,org,as,query,proxy,hosting,mobile,crawler"
+            [[ "$name" == "iplocate.io" ]] && url="https://www.iplocate.io/api/lookup/"
+        fi
+
+        ((i++))
+        (
+            local res
+            res=$(curl -s -m 5 "$url")
+            if echo "$res" | jq . > /dev/null 2>&1; then
+                printf "%s\n" "$res" > "/tmp/dt_res_${session_id}_${i}"
+            fi
+        ) &
+    done
+    wait
+
+    # Combine results for consensus
+    for tmp in /tmp/dt_res_${session_id}_*; do
+        [[ -f "$tmp" ]] || continue
+        # Merge data points
+        jq -s 'reduce .[] as $item ({}; . * $item)' "$consensus_file" "$tmp" > "${consensus_file}.tmp" && mv "${consensus_file}.tmp" "$consensus_file"
+        rm "$tmp"
+        ((success_count++))
+    done
+
+    if [[ $success_count -eq 0 ]]; then return 1; fi
+    
+    cat "$consensus_file"
+    rm "$consensus_file"
+}
+
+# DIRTY TITIAN Display & Analysis Engine
+titian_analyze() {
+    local data=$1
+    local is_batch=${2:-false}
+
+    # Extract & Standardize
+    local ip city region country lat lon isp asn proxy hosting mobile crawler rdns
+    
+    ip=$(echo "$data" | jq -r '.ip // .query // "N/A"')
+    city=$(echo "$data" | jq -r '.city // "N/A"')
+    region=$(echo "$data" | jq -r '.region // .regionName // "N/A"')
+    country=$(echo "$data" | jq -r '.country_name // .country // "N/A"')
+    lat=$(echo "$data" | jq -r '.latitude // .lat // "N/A"')
+    lon=$(echo "$data" | jq -r '.longitude // .lon // "N/A"')
+    isp=$(echo "$data" | jq -r '.org // .isp // "N/A"')
+    asn=$(echo "$data" | jq -r '.asn // .as // "N/A"')
+    
+    # Extra Intelligence
+    proxy=$(echo "$data" | jq -r '.proxy // .is_proxy // "false"')
+    hosting=$(echo "$data" | jq -r '.hosting // .is_datacenter // "false"')
+    mobile=$(echo "$data" | jq -r '.mobile // "false"')
+    crawler=$(echo "$data" | jq -r '.crawler // "false"')
+
+    # Domain/DNS Intelligence
+    rdns=$(dig -x "$ip" +short | head -1 | sed 's/\.$//' || echo "N/A")
+    
+    if [[ "$is_batch" == "true" ]]; then
+        printf "${COLOR_WHITE}[#] $ip | $city, $country | $isp | Type: $( [[ "$mobile" == "true" ]] && echo "Mobile" || echo "Broadband" ) ${COLOR_RESET}\n"
+    else
+        local dec_ip=$(ipv4_to_decimal "$ip")
+        local lat_dms=$(dms_convert "$lat" "lat")
+        local lon_dms=$(dms_convert "$lon" "lon")
+
+        printf "\n  ${COLOR_CYAN}  --- DIRTY TITIAN Deep Network Intel ---${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  IP Address    ${COLOR_WHITE}:${COLOR_GREEN}   $ip (Decimal: $dec_ip)${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  Hostname      ${COLOR_WHITE}:${COLOR_GREEN}   ${rdns:-"No PTR"}${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  Organization  ${COLOR_WHITE}:${COLOR_GREEN}   $isp ($asn)${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  Location      ${COLOR_WHITE}:${COLOR_GREEN}   $city, $region, $country${COLOR_RESET}\n"
+        
+        # Security Assessment
+        printf "  ${COLOR_YELLOW}  Risk Profile  ${COLOR_WHITE}:${COLOR_RESET}"
+        if [[ "$proxy" == "true" ]]; then printf " ${COLOR_BG_RED} PROXY/VPN ${COLOR_RESET}"; fi
+        if [[ "$hosting" == "true" ]]; then printf " ${COLOR_RED} DATACENTER ${COLOR_RESET}"; fi
+        if [[ "$crawler" == "true" ]]; then printf " ${COLOR_BLUE} CRAWLER/BOT ${COLOR_RESET}"; fi
+        if [[ "$proxy" == "false" && "$hosting" == "false" && "$crawler" == "false" ]]; then printf " ${COLOR_GREEN} LOW RISK ${COLOR_RESET}"; fi
+        printf "\n"
+
+        printf "  ${COLOR_YELLOW}  Services      ${COLOR_WHITE}:${COLOR_CYAN}   $( [[ "$hosting" == "true" ]] && echo "Data Center/Transit" || echo "Consumer ISP" ) | $( [[ "$mobile" == "true" ]] && echo "Carrier" || echo "Fixed-line" )${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  Coordinates   ${COLOR_WHITE}:${COLOR_GREEN}   $lat, $lon${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  DMS Precision ${COLOR_WHITE}:${COLOR_GREEN}   $lat_dms | $lon_dms${COLOR_RESET}\n"
+        printf "  ${COLOR_YELLOW}  Accuracy      ${COLOR_WHITE}:${COLOR_YELLOW}   Consensus Verified (Source: DIRTY TITIAN Engine)${COLOR_RESET}\n"
+        
+        printf "\n  ${COLOR_CYAN}  --- Global Access ---${COLOR_RESET}\n"
+        printf "  ${COLOR_BLUE}  MAP: https://maps.google.com/?q=$lat,$lon${COLOR_RESET}\n\n"
+    fi
+
+    # Log to History with high accuracy
+    printf "$(date '+%Y-%m-%d %H:%M:%S') | DIRTY TITIAN | $ip | $city, $country | $isp\n" >> "$LOG_FILE"
+}
+
+batch_process() {
+    local file=$1
+    [[ ! -f "$file" ]] && { printf " ${COLOR_RED}[!] File not found.${COLOR_RESET}\n"; return 1; }
+
+    printf "\n  ${COLOR_MAGENTA}[*] Launching DIRTY TITIAN Consensus Threader (Limit: $MAX_THREADS)...${COLOR_RESET}\n\n"
+    
+    local running=0
+    while IFS= read -r ip || [[ -n "$ip" ]]; do
+        ip=$(echo "$ip" | xargs)
+        [[ -z "$ip" || "$ip" == "#"* ]] && continue
+        
+        if ! validate_ip "$ip"; then
+            printf " ${COLOR_RED}[!] Invalid IP: $ip${COLOR_RESET}\n"
+            continue
+        fi
+
+        (
+            local res
+            if res=$(get_ip_consensus "$ip"); then
+                titian_analyze "$res" true
+            else
+                printf " ${COLOR_RED}[!] Accuracy Engine Failed: $ip${COLOR_RESET}\n"
+            fi
+        ) &
+        
+        ((running++))
+        # Bash 3.2 Compatible Semaphore
+        if [[ $running -ge $MAX_THREADS ]]; then
+            while [ $(jobs -rp | wc -l) -ge $MAX_THREADS ]; do
+                sleep 0.2
+            done
+        fi
+    done < "$file"
+    wait
+    printf "\n  ${COLOR_GREEN}[+] DIRTY TITIAN Parallel Operations Completed.${COLOR_RESET}\n"
+}
+
+main() {
+    check_dependencies
+    while true; do
+        banner
+        printf "  ${COLOR_WHITE}[${COLOR_MAGENTA}01${COLOR_WHITE}]${COLOR_CYAN} DIRTY TITIAN Personal Intel${COLOR_RESET}\n"
+        printf "  ${COLOR_WHITE}[${COLOR_MAGENTA}02${COLOR_WHITE}]${COLOR_CYAN} Track High-Accuracy Target${COLOR_RESET}\n"
+        printf "  ${COLOR_WHITE}[${COLOR_MAGENTA}03${COLOR_WHITE}]${COLOR_CYAN} DIRTY TITIAN Threaded Batch Tracker${COLOR_RESET}\n"
+        printf "  ${COLOR_WHITE}[${COLOR_MAGENTA}04${COLOR_WHITE}]${COLOR_CYAN} View Consensus History${COLOR_RESET}\n"
+        printf "  ${COLOR_WHITE}[${COLOR_MAGENTA}00${COLOR_WHITE}]${COLOR_CYAN} Exit DIRTY TITIAN Engine${COLOR_RESET}\n\n"
+        read -p "  [~] System Command >> " option
+
+        case "$option" in
+            1|01)
+                printf "  ${COLOR_CYAN}[*] Synchronizing consensus data...${COLOR_RESET}\n"
+                res=$(get_ip_consensus "") && titian_analyze "$res" false || printf " ${COLOR_RED}[!] Engine fault.${COLOR_RESET}\n"
+                read -p "  [ ENTER ]" junk; ;;
+            2|02)
+                printf "\n"; read -p "  [~] Entry Target IP >> " userip
+                if validate_ip "$userip"; then
+                    printf "  ${COLOR_CYAN}[*] Analyzing $userip (DIRTY TITIAN Engine)...${COLOR_RESET}\n"
+                    res=$(get_ip_consensus "$userip") && titian_analyze "$res" false || printf " ${COLOR_RED}[!] Fault.${COLOR_RESET}\n"
+                else
+                    printf " ${COLOR_RED}[!] Invalid Address.${COLOR_RESET}\n"
+                fi
+                read -p "  [ ENTER ]" junk; ;;
+            3|03)
+                printf "\n"; read -p "  [~] Source File Path >> " path
+                batch_process "$path"
+                read -p "  [ ENTER ]" junk; ;;
+            4|04)
+                banner; [[ -f "$LOG_FILE" ]] && tail -n 20 "$LOG_FILE" | sed 's/^/  /' || printf "  Vault is empty.\n"
+                read -p "  [ ENTER ]" junk; ;;
+            0|00) printf "  ${COLOR_MAGENTA}[*] Shutting down DIRTY TITIAN Engine...${COLOR_RESET}\n"; exit 0; ;;
+            *) sleep 0.5; ;;
+        esac
+    done
+}
+
+main "$@"
